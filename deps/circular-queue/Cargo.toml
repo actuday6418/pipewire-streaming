@@ -1,0 +1,30 @@
+[package]
+name = "circular-queue2"
+version = "0.1.0"
+authors = ["Ivan Molodetskikh <yalterz@gmail.com>"]
+description = "A circular buffer-like queue - forked with bulk inserts, removed legacy stuff."
+license = "MIT/Apache-2.0"
+edition = "2024"
+
+readme = "README.md"
+documentation = "https://docs.rs/circular-queue"
+repository = "https://github.com/actuday6418/circular-queue"
+keywords = ["circular", "buffer", "ring", "queue", "container"]
+categories = ["data-structures"]
+
+[build-dependencies]
+version_check = "0.9"
+
+[features]
+default = []
+serde_support = ["serde"]
+serde_support_test = ["serde_support", "serde_test", "serde_json", "bincode"]
+
+[dependencies]
+serde = {version = "1.0", optional = true, features = ["derive"]}
+serde_test = {version = "1.0", optional = true}
+serde_json = {version = "1.0", optional = true}
+bincode = {version = "1.2.1", optional = true}
+
+[package.metadata.docs.rs]
+features = ["serde_support"]
