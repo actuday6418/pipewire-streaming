@@ -35,6 +35,13 @@ pub fn spawn_webtransport_thread(
             let identity = wtransport::Identity::load_pemfiles("cert.pem", "key.pem")
                 .await
                 .unwrap();
+            // Uncomment to get certificate HASH to be pasted in js
+            println!(
+                "{}",
+                identity.certificate_chain().as_slice()[0]
+                    .hash()
+                    .fmt(wtransport::tls::Sha256DigestFmt::BytesArray),
+            );
             let config = wtransport::ServerConfig::builder()
                 .with_bind_default(listen_address)
                 .with_identity(identity)

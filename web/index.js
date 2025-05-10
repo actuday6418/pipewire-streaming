@@ -63,7 +63,7 @@
         }
 
          async function connectAndReceive() {
-            const HASH = new Uint8Array([180, 243, 46, 82, 246, 25, 60, 198, 128, 53, 245, 95, 188, 79, 112, 110, 52, 88, 151, 224, 237, 213, 31, 188, 61, 3, 142, 145, 99, 56, 85, 242]);
+            const HASH = new Uint8Array([203, 161, 236, 157, 162, 69, 127, 21, 203, 108, 16, 39, 61, 52, 160, 238, 48, 62, 101, 119, 169, 3, 216, 17, 236, 38, 206, 11, 53, 98, 168, 132]);
             initAudio();
             if (!audioContext || !audioDecoder) {
                  statusDisplay.textContent = "Audio initialization failed. Cannot proceed.";
@@ -71,7 +71,7 @@
                 return;
             }
             try {
-                transport = new WebTransport('https://localhost:13345', { serverCertificateHashes: [{ algorithm: "sha-256", value: HASH.buffer }]});
+                transport = new WebTransport(`https://${location.hostname}:13345`, { serverCertificateHashes: [{ algorithm: "sha-256", value: HASH.buffer }]});
                 await transport.ready;
                 statusDisplay.textContent = "Connected";
                 connected = true;

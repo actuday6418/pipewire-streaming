@@ -35,6 +35,8 @@ fn main() {
         &core,
         "fake-audio-sink",
         pw::properties::properties! {
+            *pw::keys::MEDIA_CLASS => "Audio/Sink",
+            *pw::keys::AUDIO_CHANNELS => "6",
             *pw::keys::MEDIA_TYPE => "Audio",
             *pw::keys::MEDIA_CATEGORY => "Playback",
             *pw::keys::MEDIA_ROLE => "Music",
@@ -54,13 +56,11 @@ fn main() {
             stream.dequeue_buffer().map(|mut buffer| {
                 let datas = buffer.datas_mut();
                 if !datas.is_empty() {
-                    let maybe_data = datas[0].data();
-                    if let Some(data) = maybe_data {
+                    if let Some(data) = datas[0].data() {
                         let packet_bytes: Vec<i16> = data
                             .chunks_exact(2)
                             .map(|chunk| {
-                                let bytes: [u8; 2] =
-                                    chunk.try_into().expect("Chunk size should be 2");
+                                let bytes: [u8; 2] = chunk.try_into().unwrap();
                                 i16::from_le_bytes(bytes)
                             })
                             .collect();
@@ -74,8 +74,18 @@ fn main() {
 
     let mut audio_info = libspa::param::audio::AudioInfoRaw::new();
     audio_info.set_format(libspa::param::audio::AudioFormat::S16P);
-    audio_info.set_channels(1);
+    audio_info.set_channels(6);
     audio_info.set_rate(SAMPLE_RATE);
+    let mut positions = [0; pw::spa::param::audio::MAX_CHANNELS];
+    positions[0..6].copy_from_slice(&[
+        pw::spa::sys::SPA_AUDIO_CHANNEL_FL,
+        pw::spa::sys::SPA_AUDIO_CHANNEL_FR,
+        pw::spa::sys::SPA_AUDIO_CHANNEL_FC,
+        pw::spa::sys::SPA_AUDIO_CHANNEL_LFE,
+        pw::spa::sys::SPA_AUDIO_CHANNEL_SL,
+        pw::spa::sys::SPA_AUDIO_CHANNEL_SR,
+    ]);
+    audio_info.set_position(positions);
 
     let obj = pw::spa::pod::Object {
         type_: pw::spa::utils::SpaTypes::ObjectParamFormat.as_raw(),
