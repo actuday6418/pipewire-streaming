@@ -5,24 +5,18 @@ use std::time::Duration;
 use wtransport::ClientConfig;
 use wtransport::tls::Sha256Digest;
 
-// --- Configuration Constants ---
-// IMPORTANT: Adjust these to match YOUR SERVER configuration
-const SERVER_URL: &str = "https://localhost:13345"; // Or your server's IP if not localhost
+const SERVER_URL: &str = "https://localhost:13345";
 const SAMPLE_RATE: u32 = 48_000;
 const OPUS_CHANNELS: opus::Channels = opus::Channels::Mono;
-const PLAYBACK_CHANNELS: u16 = 1; // Mono playback
-const OPUS_FRAME_MS_SERVER: u32 = 10; // What the SERVER is configured to send (e.g., 5ms)
-// SAMPLES_PER_FRAME_EXPECTED is based on server's OPUS_FRAME_MS
+const PLAYBACK_CHANNELS: u16 = 1;
+const OPUS_FRAME_MS_SERVER: u32 = 10;
 const SAMPLES_PER_FRAME_EXPECTED: usize = (SAMPLE_RATE * OPUS_FRAME_MS_SERVER / 1000) as usize;
 
-// This MUST match the hash output by your server (or from your JS client HASH const)
-// Example: [13, 168, 113, 2, 213, 136, 124, 10, 80, 208, 200, 56, 29, 68, 119, 16, 194, 119, 112, 219, 4, 102, 187, 137, 91, 248, 119, 10, 167, 127, 119, 240]
 const SERVER_CERT_HASH_BYTES: [u8; 32] = [
     13, 168, 113, 2, 213, 136, 124, 10, 80, 208, 200, 56, 29, 68, 119, 16, 194, 119, 112, 219, 4,
     102, 187, 137, 91, 248, 119, 10, 167, 127, 119, 240,
 ];
 
-// Max possible PCM samples for a 120ms Opus frame at 48kHz
 const MAX_PCM_SAMPLES_PER_FRAME: usize = (48_000 * 120) / 1000;
 
 fn playback_thread(
@@ -33,8 +27,6 @@ fn playback_thread(
     let (_stream, stream_handle) =
         OutputStream::try_default().context("Failed to get default audio output stream")?;
     let sink = Sink::try_new(&stream_handle).context("Failed to create audio sink")?;
-
-    println!("[PlaybackThread] Started. Waiting for PCM data...");
 
     for pcm_data in pcm_receiver {
         if pcm_data.is_empty() {
@@ -50,61 +42,25 @@ fn playback_thread(
         let source = SamplesBuffer::new(channels, sample_rate, pcm_data);
         sink.append(source);
         sink.play();
-
-        // Autoplay if not already playing and buffer has reasonable content
-        // if sink.empty() || sink.is_paused() {
-        //     // sink.is_paused is not always reliable with append
-        //     if sink.len() > 0 {
-        //         // Check if there's actually something to play
-        //         sink.play();
-        //     }
-        // }
-        // Add a small sleep if the sink buffer is getting too large, to allow playback to catch up
-        // This is a very basic form of backpressure/flow control for playback.
-        // Adjust threshold (e.g. 10 buffers) and sleep duration as needed.
-        // if sink.len() > 10 {
-        //     // If more than 10 buffers are queued
-        //     // println!("[PlaybackThread] Sink queue is large ({}), sleeping for a bit.", sink.len());
-        //     thread::sleep(Duration::from_millis(OPUS_FRAME_MS_SERVER as u64 * 5)); // Sleep for a few frame durations
-        // }
     }
-
-    println!("[PlaybackThread] PCM channel closed. Waiting for sink to finish...");
     sink.sleep_until_end();
-    println!("[PlaybackThread] Finished.");
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("Rust WebTransport Audio Client Starting...");
     println!("Connecting to: {}", SERVER_URL);
-    println!(
-        "Expected server Opus frame duration: {}ms ({} samples)",
-        OPUS_FRAME_MS_SERVER, SAMPLES_PER_FRAME_EXPECTED
-    );
-
     let server_cert_hash = Sha256Digest::new(SERVER_CERT_HASH_BYTES);
-
     let config = ClientConfig::builder()
         .with_bind_default()
         .with_no_cert_validation()
         .build();
-
     let endpoint = wtransport::Endpoint::client(config)
         .context("Failed to create WebTransport client endpoint")?;
-
-    println!("Attempting to connect to server...");
     let connection = endpoint
         .connect(SERVER_URL)
         .await
         .context(format!("Failed to connect to server at {}", SERVER_URL))?;
-
-    println!(
-        "Connected successfully! Connection ID: {}",
-        connection.stable_id()
-    );
-
     println!("Waiting for incoming unidirectional stream...");
     let mut stream_reader = connection
         .accept_uni()
@@ -113,19 +69,15 @@ async fn main() -> Result<()> {
 
     let (pcm_sender, pcm_receiver) = crossbeam_channel::unbounded::<Vec<i16>>();
 
-    // Spawn playback thread
     let playback_handle = thread::spawn(move || {
         if let Err(e) = playback_thread(pcm_receiver, SAMPLE_RATE, PLAYBACK_CHANNELS) {
             eprintln!("[PlaybackThread] Error: {:?}", e);
         }
     });
-
-    // Opus decoder
     let mut opus_decoder =
         opus::Decoder::new(SAMPLE_RATE, OPUS_CHANNELS).context("Failed to create Opus decoder")?;
-
-    let mut pcm_out_buffer = vec![0i16; MAX_PCM_SAMPLES_PER_FRAME]; // Max possible size
-    let mut pcm_in_buffer = vec![0u8; MAX_PCM_SAMPLES_PER_FRAME]; // Max possible size
+    let mut pcm_out_buffer = vec![0i16; MAX_PCM_SAMPLES_PER_FRAME];
+    let mut pcm_in_buffer = vec![0u8; MAX_PCM_SAMPLES_PER_FRAME];
 
     let mut packet_count = 0;
     println!("[NetworkRead] Reading Opus packets from stream...");
@@ -133,14 +85,10 @@ async fn main() -> Result<()> {
     loop {
         if let Ok(Some(no)) = stream_reader.read(&mut pcm_in_buffer).await {
             packet_count += 1;
-
             match opus_decoder.decode(&pcm_in_buffer[..no], &mut pcm_out_buffer, false) {
                 Ok(decoded_sample_count) => {
                     if decoded_sample_count > 0 {
-                        // println!("[NetworkRead] Decoded {} PCM samples.", decoded_sample_count);
                         if decoded_sample_count != SAMPLES_PER_FRAME_EXPECTED {
-                            // This might happen if server sends variable length frames or if there's packet loss (PLC)
-                            // For now, we just log. Opus PLC might output different sample counts.
                             println!(
                                 "[NetworkRead] WARN: Decoded {} samples, expected {}.",
                                 decoded_sample_count, SAMPLES_PER_FRAME_EXPECTED
@@ -165,20 +113,13 @@ async fn main() -> Result<()> {
                         "[NetworkRead] Opus decoding error for packet {}: {:?}. Skipping packet.",
                         packet_count, e
                     );
-                    // Potentially reset decoder: opus_decoder.reset_state()?;
                 }
             }
         }
     }
-
-    println!("[NetworkRead] Finished reading from stream. Closing PCM sender.");
-    drop(pcm_sender); // Signal playback thread to finish
-
-    println!("Waiting for playback thread to complete...");
+    drop(pcm_sender);
     if playback_handle.join().is_err() {
         eprintln!("Playback thread panicked.");
     }
-
-    println!("Client finished.");
     Ok(())
 }

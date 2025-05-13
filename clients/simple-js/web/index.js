@@ -4,7 +4,7 @@ const SERVER_CERT_HASH_BYTES = [
 ];
 const SAMPLE_RATE = 48000;
 const NUMBER_OF_CHANNELS = 1;
-const FRAME_DURATION_MS = 5;
+const FRAME_DURATION_MS = 10;
 
 let audioContext = null;
 let audioDecoder = null;
