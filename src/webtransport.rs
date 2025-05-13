@@ -1,29 +1,31 @@
 use anyhow::Result;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use tokio::sync::watch;
+use tokio::sync::broadcast;
 use wtransport::endpoint::IncomingSession;
 
 async fn handle_connection(
     incoming_session: IncomingSession,
-    mut rx: watch::Receiver<Vec<u8>>,
+    mut rx: broadcast::Receiver<Vec<u8>>,
 ) -> Result<()> {
     let session_request = incoming_session.await?;
     let connection = session_request.accept().await?;
     let mut send_stream = connection.open_uni().await?.await?;
     loop {
         tokio::select! {
-            changed = rx.changed() => {
-                if changed.is_err() {return Ok(())}
-                let packet = rx.borrow_and_update().clone();
-                send_stream.write_all(&packet).await?;
+            msg = rx.recv() => {
+                match msg {
+                    Ok(msg) => send_stream.write_all(&msg).await?,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => eprintln!("WARN: Audio receiver for client {} lagged, {} messages missed. Stream may be distorted.", connection.stable_id(), n),
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return Ok(())
+                }
             }
         }
     }
 }
 
 pub fn spawn_webtransport_thread(
-    packet_receiver: watch::Receiver<Vec<u8>>,
+    packet_receiver: broadcast::Receiver<Vec<u8>>,
     listen_address: u16,
 ) -> JoinHandle<()> {
     let handle = std::thread::spawn(move || {
@@ -35,7 +37,6 @@ pub fn spawn_webtransport_thread(
             let identity = wtransport::Identity::load_pemfiles("cert.pem", "key.pem")
                 .await
                 .unwrap();
-            // Uncomment to get certificate HASH to be pasted in js
             println!(
                 "{}",
                 identity.certificate_chain().as_slice()[0]
@@ -51,7 +52,10 @@ pub fn spawn_webtransport_thread(
             let server = wtransport::Endpoint::server(config).unwrap();
             loop {
                 let incoming_session = server.accept().await;
-                tokio::spawn(handle_connection(incoming_session, packet_receiver.clone()));
+                tokio::spawn(handle_connection(
+                    incoming_session,
+                    packet_receiver.resubscribe(),
+                ));
             }
         })
     });

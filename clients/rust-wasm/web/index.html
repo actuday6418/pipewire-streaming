@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+</head>
+<body>
+    <button id="connectButton">Connect</button>
+    <p id="status">Not Connected</p>
+    <canvas id="visualizerCanvas" width="800" height="200"></canvas>
+
+    <script src=></script>
+    <script type="module">
+        import init from './pkg/rust_wasm_audio_client.js';
+        async function run() {
+            await init(); 
+        }
+        run();
+    </script>
+
+</body>
+</html>

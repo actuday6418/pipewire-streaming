@@ -1,0 +1,13 @@
+[package]
+name = "rust_native_client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+tokio = { version = "1", features = ["full"] }
+opus = "0.3.0"
+rodio = "0.18.0"
+crossbeam-channel = "0.5"
+hex = "0.4"
+wtransport = {version="0.6.1", features=["dangerous-configuration"]}

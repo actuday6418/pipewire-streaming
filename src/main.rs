@@ -1,9 +1,11 @@
+use std::mem;
+
 use compress::spawn_compress_thread;
 use http::spawn_http_thread;
 use libspa::pod;
 use libspa::utils::Direction;
 use pipewire as pw;
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 use webtransport::spawn_webtransport_thread;
 
 mod compress;
@@ -11,7 +13,7 @@ mod http;
 mod webtransport;
 
 const SAMPLE_RATE: u32 = 48_000;
-const OPUS_FRAME_MS: u32 = 5;
+const OPUS_FRAME_MS: u32 = 10;
 const SAMPLES_PER_FRAME: u32 = (SAMPLE_RATE * OPUS_FRAME_MS) / 1000;
 const WEBTRANSPORT_PORT: u16 = 13345;
 const HTTP_PORT: u16 = 13346;
@@ -22,7 +24,7 @@ struct SinkData {
 
 fn main() {
     let (raw_packet_tx, raw_packet_rx) = crossbeam_channel::unbounded();
-    let (compressed_packet_tx, compressed_packet_rx) = watch::channel(Vec::new());
+    let (compressed_packet_tx, compressed_packet_rx) = broadcast::channel(200);
     let _webtransport_handle = spawn_webtransport_thread(compressed_packet_rx, WEBTRANSPORT_PORT);
     let _worker_handle = spawn_compress_thread(raw_packet_rx, compressed_packet_tx);
     let _http_handle = spawn_http_thread();
@@ -42,7 +44,7 @@ fn main() {
             *pw::keys::MEDIA_ROLE => "Music",
             *pw::keys::NODE_NAME => "fake-speaker",
             *pw::keys::NODE_DESCRIPTION => "Fake Speaker",
-            *pw::keys::NODE_LATENCY => "500/48000",
+            *pw::keys::NODE_LATENCY => "1000/48000",
         },
     )
     .expect("Couldn't create PipeWire stream");
@@ -54,10 +56,13 @@ fn main() {
         .add_local_listener_with_user_data(sink_data)
         .process(move |stream, user_data| {
             stream.dequeue_buffer().map(|mut buffer| {
-                let datas = buffer.datas_mut();
-                if !datas.is_empty() {
-                    if let Some(data) = datas[0].data() {
-                        let packet_bytes: Vec<i16> = data
+                let channels = buffer.datas_mut();
+                let data = &mut channels[0];
+                let actual_size = data.chunk().size();
+
+                if !channels.is_empty() {
+                    if let Some(samples) = channels[0].data() {
+                        let packet_bytes: Vec<_> = samples[0..actual_size as usize]
                             .chunks_exact(2)
                             .map(|chunk| {
                                 let bytes: [u8; 2] = chunk.try_into().unwrap();

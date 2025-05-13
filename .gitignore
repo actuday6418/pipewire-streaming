@@ -1,0 +1,5 @@
+/target
+/web/pkg
+/clients/rust-wasm/web/pkg
+/clients/rust-wasm/target
+/clients/rust-native/target

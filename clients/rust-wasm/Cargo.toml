@@ -1,0 +1,52 @@
+[package]
+name = "rust-wasm-audio-client"
+version = "0.1.0"
+authors = ["Arun <actuday6418@gmail.com>"]
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"] # cdylib for WASM, rlib for testing
+
+[dependencies]
+wasm-bindgen = "0.2.92" # Or latest
+wasm-bindgen-futures = "0.4.42" # For async JS interop
+js-sys = "0.3.69" # Raw JS types
+web-sys = { version = "0.3.69", features = [
+    "console",
+    "AudioContext",
+    "AudioBuffer",
+    "AudioBufferSourceNode",
+    "AudioContextState",
+    "AudioDestinationNode",
+    "CodecState",
+    "WebTransport",
+    "WebTransportReceiveStream",
+    "ReadableStreamDefaultReader",
+    "EncodedAudioChunk",
+    "EncodedAudioChunkInit",
+    "EncodedAudioChunkType",
+    "AudioDecoder",
+    "AudioDecoderInit",
+    "AudioDecoderConfig",
+    "AudioData",
+    "AudioDataCopyToOptions",
+    "AudioContextOptions",
+    "WebTransportOptions",
+    "Location",
+    "Window",
+    "Document",
+    "HtmlButtonElement",
+    "HtmlParagraphElement",
+    "Element",
+    "Event",
+    "MouseEvent",
+    "Response",
+    "Headers",
+]}
+# opus = "0.3.0"
+console_error_panic_hook = "0.1.7" # Better panic messages
+
+
+[profile.release]
+opt-level = "s"
+lto = true
